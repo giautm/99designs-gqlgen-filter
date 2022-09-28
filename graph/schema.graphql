@@ -1,0 +1,88 @@
+type Bug {
+	id: ID!
+	name: String!
+	products(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product!]
+
+}
+
+type Product {
+	id: ID!
+	name: String!
+	bugs(filter: BugFilter, order: BugOrder, first: Int, offset: Int): [Bug!]
+}
+
+
+type Query {
+	queryBug(filter: BugFilter, first: Int, offset: Int): [Bug]
+}
+
+
+input ProductFilter {
+	id: [ID!]
+	name: StringTermFilter
+	has: [ProductHasFilter]
+	and: [ProductFilter]
+	or: [ProductFilter]
+	not: ProductFilter
+}
+
+input ProductOrder {
+	asc: ProductOrderable
+	desc: ProductOrderable
+	then: ProductOrder
+}
+
+input BugFilter {
+	id: [ID!]
+	name: StringTermFilter
+	has: [BugHasFilter]
+	and: [BugFilter]
+	or: [BugFilter]
+	not: BugFilter
+}
+
+input DateTimeFilter {
+	eq: DateTime
+	in: [DateTime]
+	le: DateTime
+	lt: DateTime
+	ge: DateTime
+	gt: DateTime
+	between: DateTimeRange
+}
+
+input DateTimeRange{
+	min: DateTime!
+	max: DateTime!
+}
+
+
+input BugOrder {
+	asc: BugOrderable
+	desc: BugOrderable
+	then: BugOrder
+}
+
+input StringTermFilter {
+	allofterms: String
+	anyofterms: String
+}
+
+
+enum BugOrderable {
+	name
+}
+
+enum BugHasFilter {
+	name
+}
+
+enum ProductHasFilter {
+	name
+}
+
+enum ProductOrderable {
+	name
+}
+
+scalar DateTime
