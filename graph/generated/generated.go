@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
+	"sync/atomic"
 
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/99designs/gqlgen/graphql/introspection"
@@ -35,6 +36,7 @@ type Config struct {
 }
 
 type ResolverRoot interface {
+	Bug() BugResolver
 	Query() QueryResolver
 }
 
@@ -59,6 +61,9 @@ type ComplexityRoot struct {
 	}
 }
 
+type BugResolver interface {
+	Products(ctx context.Context, obj *model.Bug, filter *model.ProductFilter, order *model.ProductOrder, first *int, offset *int) ([]*model.Product, error)
+}
 type QueryResolver interface {
 	QueryBug(ctx context.Context, filter *model.BugFilter, first *int, offset *int) ([]*model.Bug, error)
 }
@@ -202,10 +207,15 @@ func (ec *executionContext) introspectType(name string) (*introspection.Type, er
 }
 
 var sources = []*ast.Source{
-	{Name: "../schema.graphql", Input: `type Bug {
+	{Name: "../schema.graphql", Input: `directive @goField(
+	forceResolver: Boolean
+	name: String
+) on INPUT_FIELD_DEFINITION | FIELD_DEFINITION
+
+type Bug {
 	id: ID!
 	name: String!
-	products(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product!]
+	products(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product!] @goField(forceResolver: true)
 
 }
 
@@ -570,7 +580,7 @@ func (ec *executionContext) _Bug_products(ctx context.Context, field graphql.Col
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.Products, nil
+		return ec.resolvers.Bug().Products(rctx, obj, fc.Args["filter"].(*model.ProductFilter), fc.Args["order"].(*model.ProductOrder), fc.Args["first"].(*int), fc.Args["offset"].(*int))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -588,8 +598,8 @@ func (ec *executionContext) fieldContext_Bug_products(ctx context.Context, field
 	fc = &graphql.FieldContext{
 		Object:     "Bug",
 		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
+		IsMethod:   true,
+		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
 			case "id":
@@ -3121,19 +3131,32 @@ func (ec *executionContext) _Bug(ctx context.Context, sel ast.SelectionSet, obj 
 			out.Values[i] = ec._Bug_id(ctx, field, obj)
 
 			if out.Values[i] == graphql.Null {
-				invalids++
+				atomic.AddUint32(&invalids, 1)
 			}
 		case "name":
 
 			out.Values[i] = ec._Bug_name(ctx, field, obj)
 
 			if out.Values[i] == graphql.Null {
-				invalids++
+				atomic.AddUint32(&invalids, 1)
 			}
 		case "products":
+			field := field
 
-			out.Values[i] = ec._Bug_products(ctx, field, obj)
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Bug_products(ctx, field, obj)
+				return res
+			}
 
+			out.Concurrently(i, func() graphql.Marshaler {
+				return innerFunc(ctx)
+
+			})
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}

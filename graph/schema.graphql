@@ -1,7 +1,12 @@
+directive @goField(
+	forceResolver: Boolean
+	name: String
+) on INPUT_FIELD_DEFINITION | FIELD_DEFINITION
+
 type Bug {
 	id: ID!
 	name: String!
-	products(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product!]
+	products(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product!] @goField(forceResolver: true)
 
 }
 
